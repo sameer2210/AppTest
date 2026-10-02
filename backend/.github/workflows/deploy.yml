@@ -1,0 +1,61 @@
+name: Deploy Backend Dev
+
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.2.5
+
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 7576
+          # script_stop is not a valid input on appleboy/ssh-action@v1.2.5;
+          # set -euo pipefail below stops the remote script on first failure.
+          command_timeout: 10m
+
+          script: |
+            set -euo pipefail
+            cd /root/stron-backend-dev
+            echo "Pulling latest develop..."
+            git fetch origin develop
+            if ! git pull --ff-only origin develop; then
+              echo "Fast-forward pull failed because server branch diverged. Resetting server to match origin/develop..."
+              git reset --hard origin/develop
+            fi
+            npm install
+            npm run build
+            # startOrReload keeps the old script path (root server.js). After the
+            # JS→TS migration the entry is dist/src/server.js — delete + start.
+            pm2 delete stron-dev 2>/dev/null || true
+            pm2 start ecosystem.config.cjs --only stron-dev --update-env
+            pm2 save
+            # Never `source` .env under `set -u` — passwords/URIs with `$` fail the job
+            # (seen as: ./.env: line N: <token>: unbound variable). Read PORT only.
+            PORT=5000
+            if [ -f .env ]; then
+              raw_port="$(grep -E '^[[:space:]]*PORT=' .env | tail -n1 | cut -d= -f2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || true)"
+              if [ -n "${raw_port}" ]; then
+                PORT="${raw_port}"
+              fi
+            fi
+            echo "Waiting for /api/health on port ${PORT} (max 30s)..."
+            for i in $(seq 1 30); do
+              if curl -sf "http://127.0.0.1:${PORT}/api/health" >/dev/null; then
+                echo "Health check OK."
+                pm2 logs stron-dev --lines 5 --nostream
+                exit 0
+              fi
+              sleep 1
+            done
+            echo "Health check failed after 30s."
+            pm2 logs stron-dev --lines 40 --nostream
+            exit 1

@@ -1,0 +1,28 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TEAMID.com.t21.stron",
+        "paths": [
+          "/event/*",
+          "/event",
+          "/api/event/*",
+          "/api/event",
+          "/api/invite/*",
+          "/invite/*",
+          "/plan/*",
+          "/api/plan/*",
+          "/listing/*",
+          "/api/listing/*",
+          "/business/*",
+          "/api/business/*",
+          "/connect/*",
+          "/api/connect/*",
+          "/user/*",
+          "/api/user/*"
+        ]
+      }
+    ]
+  }
+}
