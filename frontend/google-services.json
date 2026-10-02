@@ -1,0 +1,87 @@
+{
+  "project_info": {
+    "project_number": "955460127665",
+    "firebase_url": "https://stepwarsnew-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "stepwarsnew",
+    "storage_bucket": "stepwarsnew.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:955460127665:android:d152f69cfeeb9366228b90",
+        "android_client_info": {
+          "package_name": "com.stepwars.stepwarsnew_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "955460127665-6brdoj3j6sqs87ia8lpfi29l6g37s1v9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.stepwars.stepwarsnew_app",
+            "certificate_hash": "a0bd17a8d1c2d60ad0dc38dd1ebcbc8f6e4ff762"
+          }
+        },
+        {
+          "client_id": "955460127665-8tej7s2uktns81jsj3oqjtferb67c9o9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.stepwars.stepwarsnew_app",
+            "certificate_hash": "697370043a48579c30331d8948944a081d111e8b"
+          }
+        },
+        {
+          "client_id": "955460127665-raoivn75rg43so7tfug28na4m668l4l1.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.stepwars.stepwarsnew_app",
+            "certificate_hash": "84e4377d482e15fb4cf290780955ded1d7365966"
+          }
+        },
+        {
+          "client_id": "955460127665-tqr9s45bfk3oeffebtdo0ohpd4gil1a4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.stepwars.stepwarsnew_app",
+            "certificate_hash": "1f8115d56cb4103ace1c674098ba28adafb0bf25"
+          }
+        },
+        {
+          "client_id": "955460127665-tqr9s45bfk3oeffebtdo0ohpd4gil1a4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.stepwars.stepwarsnew_app",
+            "certificate_hash": "5E8F16062EA3CD2C4A0D547876BAA6F38CABF625"
+          }
+        },
+        {
+          "client_id": "955460127665-hp09qv2hvb63e3b2g3fkdhinf6lcaod4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyATfJVT60JPNN8u_LTKjV1eCzso09Qe68I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "955460127665-hp09qv2hvb63e3b2g3fkdhinf6lcaod4.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "955460127665-gvlrvslqs49mt9k256lonsbvhamvgu2e.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.stepwarsApp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

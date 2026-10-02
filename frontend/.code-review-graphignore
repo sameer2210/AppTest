@@ -1,0 +1,14 @@
+# React Native / Expo — exclude generated and non-source paths from the review graph
+android/**/build/**
+android/.gradle/**
+android/.cxx/**
+ios/Pods/**
+ios/build/**
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.ttf
+*.json
+package-lock.json

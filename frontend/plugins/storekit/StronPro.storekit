@@ -1,0 +1,118 @@
+{
+  "identifier": "STRON_PRO_STOREKIT",
+  "nonRenewingSubscriptions": [],
+  "products": [],
+  "settings": {
+    "_failTransactionsEnabled": false,
+    "_locale": "en_IN",
+    "_storefront": "IND",
+    "_storeKitErrors": [
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Load Products"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Purchase"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Verification"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "App Store Sync"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Subscription Status"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "App Transaction"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Manage Subscriptions Sheet"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Refund Request Sheet"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Offer Code Redeem Sheet"
+      }
+    ]
+  },
+  "subscriptionGroups": [
+    {
+      "id": "STRON_PRO_GROUP",
+      "localizations": [],
+      "name": "STRON PRO",
+      "subscriptions": [
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "999",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "STRON_PRO_TRIAL",
+          "introductoryOffer": {
+            "internalID": "STRON_PRO_TRIAL_INTRO",
+            "numberOfPeriods": 1,
+            "paymentMode": "free",
+            "subscriptionPeriod": "P2W"
+          },
+          "localizations": [
+            {
+              "description": "STRON PRO monthly with 14-day free trial",
+              "displayName": "STRON PRO",
+              "locale": "en_IN"
+            }
+          ],
+          "productID": "com.t21.stron.pro.montly",
+          "recurringSubscriptionPeriod": "P1M",
+          "referenceName": "STRON PRO Monthly Trial",
+          "subscriptionGroupID": "STRON_PRO_GROUP",
+          "type": "RecurringSubscription",
+          "winbackOffers": []
+        },
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "999",
+          "familyShareable": false,
+          "groupNumber": 2,
+          "internalID": "STRON_PRO_NO_TRIAL",
+          "localizations": [
+            {
+              "description": "STRON PRO monthly subscription",
+              "displayName": "STRON PRO",
+              "locale": "en_IN"
+            }
+          ],
+          "productID": "com.t21.stron.pro.montly.notrial",
+          "recurringSubscriptionPeriod": "P1M",
+          "referenceName": "STRON PRO Monthly No Trial",
+          "subscriptionGroupID": "STRON_PRO_GROUP",
+          "type": "RecurringSubscription",
+          "winbackOffers": []
+        }
+      ]
+    }
+  ],
+  "version": {
+    "major": 3,
+    "minor": 0
+  }
+}

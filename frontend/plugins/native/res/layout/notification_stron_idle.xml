@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/stron_notif_root"
+    android:layout_width="match_parent"
+    android:layout_height="64dp"
+    android:background="@drawable/notification_stron_card_bg"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <!-- Left Segment: Steps Today -->
+    <LinearLayout
+        android:id="@+id/stron_steps_block"
+        android:layout_width="100dp"
+        android:layout_height="match_parent"
+        android:background="@drawable/notification_stron_left_blue"
+        android:gravity="center_vertical"
+        android:orientation="vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="10dp">
+
+        <TextView
+            android:id="@+id/stron_steps_header"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="STEPS TODAY"
+            android:textColor="#E6FFFFFF"
+            android:textSize="9sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/stron_col_steps"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="0"
+            android:textColor="#FFFFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Right Segment: Title & Subtitle/CTA -->
+    <LinearLayout
+        android:id="@+id/stron_content_block"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:background="@drawable/notification_stron_right_dark"
+        android:gravity="center_vertical"
+        android:orientation="vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp">
+
+        <TextView
+            android:id="@+id/stron_notif_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="STRON Tracker"
+            android:textColor="#FFFFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/stron_notif_subtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Keep moving towards your daily goal"
+            android:textColor="#FF4FA0FF"
+            android:textSize="11sp" />
+    </LinearLayout>
+</LinearLayout>

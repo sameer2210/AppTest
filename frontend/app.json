@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "Stron",
+    "slug": "stron",
+    "version": "2.2.7",
+    "android": {
+      "package": "com.stepwars.stepwarsnew_app",
+      "versionCode": 87
+    },
+    "ios": {
+      "bundleIdentifier": "com.t21.stron",
+      "buildNumber": "84"
+    }
+  }
+}

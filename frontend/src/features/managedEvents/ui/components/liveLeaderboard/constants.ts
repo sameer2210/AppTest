@@ -1,0 +1,1 @@
+export const LIVE_LEADERBOARD_POLL_MS = 60_000;

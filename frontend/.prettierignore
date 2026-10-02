@@ -1,0 +1,26 @@
+node_modules/
+.expo/
+.expo-shared/
+dist/
+web-build/
+build/
+coverage/
+android/
+ios/
+.kotlin/
+.code-review-graph/
+.eas/
+.cache/
+tmp/
+temp/
+
+package-lock.json
+*.tsbuildinfo
+*.log
+
+# Generated / vendor
+google-services.json
+GoogleService-Info.plist
+
+# Large static assets (images, fonts, lottie)
+assets/
