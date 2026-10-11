@@ -1,6 +1,6 @@
 /** Firebase remote config defaults + app gate keys. */
 export const REMOTE_CONFIG_DEFAULTS = {
-  backend_url: "https://apiv2.stron.in",
+  backend_url: "http://apiv2.stron.in",
   battle_time_minutes: 10,
   multiplier_3x_price: 300,
   multiplier_2x_price: 200,

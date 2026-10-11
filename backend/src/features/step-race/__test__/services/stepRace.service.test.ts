@@ -4,6 +4,7 @@ import { StepRaceModel } from "@/features/step-race/index.js";
 import { UserModel } from "@/features/identity-auth/index.js";
 import {
   countShadowRacesAway,
+  getStepRaceHistoryService,
   getStepRaceStatsService,
 } from "@/features/step-race/services/stepRace.service.js";
 import { createTestMongo } from "@/test-helpers/helpers.js";
@@ -108,5 +109,25 @@ describe("step-race: stepRace.service", () => {
     const stats = await getStepRaceStatsService({ userId: shadowUid });
     expect(stats).toBeDefined();
     expect(stats.totalRaces).toBeGreaterThanOrEqual(1);
+  });
+
+  it("uses a real 200-step target when computing history pace", async () => {
+    await StepRaceModel.create({
+      raceId: "race-target-200",
+      userId: "pace-200-user",
+      opponent: { uid: "opp-200", username: "Opp", type: "real", currentSteps: 200 },
+      startTime: new Date("2026-08-20T10:00:00.000Z"),
+      endTime: new Date("2026-08-20T10:05:00.000Z"),
+      status: "completed",
+      winner: "user",
+      targetSteps: 200,
+      userSteps: 200,
+      userTimeSeconds: 100,
+      opponentSteps: 180,
+      opponentPaceSeconds: 120,
+    });
+
+    const history = await getStepRaceHistoryService({ userId: "pace-200-user" });
+    expect(history[0]?.finalPace).toBe("01:40");
   });
 });

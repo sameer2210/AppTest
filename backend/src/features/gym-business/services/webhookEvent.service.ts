@@ -20,18 +20,23 @@ export const acceptWhatsappWebhook = async (body: unknown) => {
   const items = collectWhatsappWebhookItems(body);
   let queued = 0;
   for (const item of items) {
-    const existing = await WebhookEvent.findOne({ eventKey: item.eventKey }).select("_id").lean();
-    if (existing) continue;
-    try {
-      await WebhookEvent.create({
-        eventKey: item.eventKey,
-        field: item.field,
-        payload: item.payload,
-        status: "RECEIVED",
-      });
-    } catch (error) {
-      if (isMongoDuplicateKeyError(error)) continue;
-      throw error;
+    const existing = await WebhookEvent.findOne({ eventKey: item.eventKey }).select("jobId status").lean();
+    if (existing && (existing.jobId || existing.status !== "RECEIVED")) continue;
+    if (!existing) {
+      try {
+        await WebhookEvent.create({
+          eventKey: item.eventKey,
+          field: item.field,
+          payload: item.payload,
+          status: "RECEIVED",
+        });
+      } catch (error) {
+        if (!isMongoDuplicateKeyError(error)) throw error;
+        const raced = await WebhookEvent.findOne({ eventKey: item.eventKey })
+          .select("jobId status")
+          .lean();
+        if (!raced || raced.jobId || raced.status !== "RECEIVED") continue;
+      }
     }
     const enqueued = await enqueueWebhookEvent(item.eventKey);
     await WebhookEvent.updateOne(

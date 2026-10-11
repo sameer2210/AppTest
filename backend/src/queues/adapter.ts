@@ -25,29 +25,28 @@ export const getQueueAdapter = (): QueueAdapter => {
   return adapter;
 };
 
+const cloudApiConfigured = (): boolean =>
+  Boolean(getWhatsappAccessToken() && getWhatsappPhoneNumberId());
+
+/** True when BullMQ can be used. Throws when Cloud API credentials are set and Redis is down. */
+export const assertDurableWhatsappQueue = async (): Promise<boolean> => {
+  const reachable = isRedisConfigured() && (await pingRedis());
+  if (reachable) return true;
+  if (cloudApiConfigured()) {
+    throw new Error(
+      "Redis is unreachable. WhatsApp Cloud API credentials are set, so jobs cannot use the in-memory queue.",
+    );
+  }
+  return false;
+};
+
 export const prepareWhatsappQueueAdapter = async (): Promise<void> => {
   if (isTestEnv() || !getWhatsappWorkersEnabled()) return;
   await shutdownQueueAdapter();
 
-  if (!isRedisConfigured()) {
-    if (getWhatsappAccessToken() && getWhatsappPhoneNumberId()) {
-      logger.error(
-        "[whatsapp] Redis is required to process WhatsApp jobs when Cloud API credentials are set. Set REDIS_URL.",
-      );
-    }
-    return;
-  }
-
-  const reachable = await pingRedis();
-  if (!reachable) {
-    logger.warn(
-      "[redis] REDIS_URL is set but Redis is not running — WhatsApp jobs will use in-memory queues. Start Redis on 127.0.0.1:6379 to enable BullMQ.",
-    );
-    if (getWhatsappAccessToken() && getWhatsappPhoneNumberId()) {
-      logger.error(
-        "[whatsapp] Cloud API credentials are set but Redis is unreachable. Jobs will not survive process restarts.",
-      );
-    }
+  const durable = await assertDurableWhatsappQueue();
+  if (!durable) {
+    logger.warn("[whatsapp] Redis is unavailable. WhatsApp jobs will use in-memory queues.");
     return;
   }
 

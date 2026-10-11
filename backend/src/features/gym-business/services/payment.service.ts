@@ -439,6 +439,7 @@ export const createOnlinePaymentOrder = async ({
  */
 export const verifyOnlinePayment = async ({
   businessId,
+  customerUid = null,
   verificationData,
   hasGymStaffContext = false,
 }: ServiceParams) => {
@@ -461,8 +462,32 @@ export const verifyOnlinePayment = async ({
   if (!payment) {
     throw codedError("payment_not_found", "Payment record not found for this gateway order.");
   }
-  if (businessId && String(payment.businessId) !== String(businessId)) {
-    throw codedError("payment_not_found", "Payment record not found for this gateway order.");
+  const staffOfThisGym = Boolean(
+    businessId && String(payment.businessId) === String(businessId),
+  );
+  if (businessId && !staffOfThisGym) {
+    const membership = payment.membershipId
+      ? await Membership.findOne({
+          _id: payment.membershipId,
+          businessId: payment.businessId,
+        })
+          .select("customerUid memberId")
+          .lean()
+      : null;
+    const buyerUid = membership?.customerUid ? String(membership.customerUid) : "";
+    const callerUid = customerUid ? String(customerUid) : "";
+    const uidMatches = Boolean(callerUid) && callerUid === buyerUid;
+    if (!uidMatches) {
+      const user = callerUid
+        ? await UserModel.findOne({ uid: callerUid }).select("uid contactNo phone").lean()
+        : null;
+      const member = payment.memberId
+        ? await Member.findById(payment.memberId).select("phone").lean()
+        : null;
+      if (!member || !phoneDigitsMatch(member.phone, user)) {
+        throw codedError("payment_not_found", "Payment record not found for this gateway order.");
+      }
+    }
   }
 
   const tenantId = payment.businessId;

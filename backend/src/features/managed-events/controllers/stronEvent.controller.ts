@@ -117,6 +117,7 @@ export const getCatalogHandler = async (req: Request, res: Response) => {
   try {
     const events = await getCatalog({ format: queryString(req.query?.format) || null });
     const enriched = await enrichEventsWithOrganizerAvatar(events);
+    res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=120");
     return res.status(200).json({ success: true, events: enriched });
   } catch (error) {
     return sendError(res, error);
@@ -127,6 +128,7 @@ export const getOfficialHomeFeedHandler = async (req: Request, res: Response) =>
   try {
     const events = await getOfficialHomeFeedEvents();
     const enriched = await enrichEventsWithOrganizerAvatar(events);
+    res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=120");
     return res.status(200).json({ success: true, events: enriched });
   } catch (error) {
     return sendError(res, error);

@@ -145,7 +145,7 @@ export const checkTrialEligibility = async (req: Request, res: Response) => {
     const installedAt =
       req.query?.installedAt ||
       req.query?.installTimestamp ||
-      req.headers["x-app-installed-at"];
+      req.headers?.["x-app-installed-at"];
     const data = await proSubscriptionService.checkTrialEligibility({
       uid,
       businessId: req.businessId,

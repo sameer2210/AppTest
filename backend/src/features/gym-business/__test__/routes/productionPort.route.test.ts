@@ -42,6 +42,11 @@ describe("production port routes", () => {
     expect(listing.headers["content-type"]).toMatch(/html/);
     expect(listing.text).toContain("STRON Business Listing");
 
+    const opinion = await request(app).get("/opinion/question-123");
+    expect(opinion.status).toBe(200);
+    expect(opinion.headers["content-type"]).toMatch(/html/);
+    expect(opinion.text).toContain("https://stron.in/opinion/question-123");
+
     const connect = await request(app).get(`/connect/${uid}`);
     expect(connect.status).toBe(200);
     expect(connect.text).toContain("Connect with portowner");
@@ -66,6 +71,8 @@ describe("production port routes", () => {
       applinks: { details: Array<{ paths: string[] }> };
     };
     const paths = body.applinks.details[0].paths;
-    expect(paths).toEqual(expect.arrayContaining(["/plan/*", "/listing/*", "/connect/*", "/user/*"]));
+    expect(paths).toEqual(
+      expect.arrayContaining(["/plan/*", "/listing/*", "/opinion/*", "/connect/*", "/user/*"]),
+    );
   });
 });

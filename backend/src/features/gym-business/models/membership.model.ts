@@ -95,6 +95,17 @@ const membershipSchema = new Schema(
       type: String,
       default: null,
     },
+    /** Website checkout term. Absent on mobile purchases, which keep the plan length. */
+    purchasedDuration: {
+      type: Number,
+      default: null,
+      min: 1,
+    },
+    purchasedDurationUnit: {
+      type: String,
+      enum: ["DAYS", "MONTHS", "YEARS"],
+      default: undefined,
+    },
     /** Firebase / JWT uid of the customer who purchased online (buyer scope). */
     customerUid: {
       type: String,

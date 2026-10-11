@@ -407,14 +407,20 @@ export const createParticipationOrder = async ({
   ticketTypeId = null,
   currentStepCount = null,
   participantInfo: participantInfoRaw = null,
+  participants: participantsRaw = null,
+  quantity = null,
   couponCode: couponCodeRaw = null,
+  contribution: contributionRaw = null,
 }: ServiceParams & {
   uid: string;
   eventKey: string;
   ticketTypeId?: string | null;
   currentStepCount?: number | null;
   participantInfo?: unknown;
+  participants?: unknown;
+  quantity?: unknown;
   couponCode?: string | null;
+  contribution?: unknown;
 }) => {
   const event = await getEventByKey(eventKey);
 
@@ -449,12 +455,29 @@ export const createParticipationOrder = async ({
     throw codedError("invalid_field", "Selected ticket type does not exist.");
   }
 
-  const participantInfo = validateParticipantInfoAnswers(
-    eventDoc.participantInfoFields,
-    participantInfoRaw,
-  );
+  const passCount = Math.max(1, Math.floor(Number(quantity) || 1));
+  let participantInfo;
+  if (Array.isArray(participantsRaw)) {
+    if (participantsRaw.length !== passCount) {
+      throw codedError("invalid_field", "Each pass needs its own participant details.");
+    }
+    participantInfo = participantsRaw.flatMap((row, index) =>
+      validateParticipantInfoAnswers(eventDoc.participantInfoFields, row).map((answer) => ({
+        field: index === 0 ? answer.field : `${answer.field} #${index + 1}`,
+        value: answer.value,
+      })),
+    );
+  } else if (passCount !== 1) {
+    throw codedError("invalid_field", "Each pass needs its own participant details.");
+  } else {
+    participantInfo = validateParticipantInfoAnswers(
+      eventDoc.participantInfoFields,
+      participantInfoRaw,
+    );
+  }
 
-  const basePrice = ticketIsFree(ticket, eventDoc) ? 0 : Number(ticket.price) || 0;
+  const unitPrice = ticketIsFree(ticket, eventDoc) ? 0 : Number(ticket.price) || 0;
+  const basePrice = unitPrice * passCount;
   let couponCode = null;
   let couponDiscount = 0;
   if (couponCodeRaw && basePrice > 0) {
@@ -468,7 +491,9 @@ export const createParticipationOrder = async ({
   }
 
   const money = computeMoneySplit(basePrice, couponDiscount);
-  if (ticketIsFree(ticket, eventDoc) || !(money.totalCharged > 0)) {
+  const contribution = Math.min(100000, Math.max(0, Math.round(Number(contributionRaw) || 0)));
+  const chargedRupees = money.totalCharged + contribution;
+  if ((ticketIsFree(ticket, eventDoc) || !(money.totalCharged > 0)) && contribution <= 0) {
     return claimFreeParticipation({
       uid,
       event: eventDoc,
@@ -480,7 +505,7 @@ export const createParticipationOrder = async ({
     });
   }
 
-  const amountPaise = Math.round(money.totalCharged * 100);
+  const amountPaise = Math.round(chargedRupees * 100);
   const receipt = `sm_${uid}_${Date.now()}`.substring(0, 40);
   const order = await createOrder(amountPaise, "INR", receipt, {
     eventKey,
@@ -516,7 +541,7 @@ export const createParticipationOrder = async ({
     eventKey,
     planId: ticket.id,
     registrationId: registration._id,
-    amount: money.totalCharged,
+    amount: chargedRupees,
     currency: "INR",
     razorpayOrderId: order.id,
     status: "created",

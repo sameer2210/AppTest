@@ -14,9 +14,11 @@ import {
   createSubscription,
   cancelSubscription,
   refundPayment,
+  fetchOrder,
 } from "../../../services/razorpay.service.js";
 import { validateCoupon } from "./coupon.service.js";
 import { ensureGatewayPlanId } from "./membershipPlan.service.js";
+import { isPublicPlanVisibility } from "../../../services/stronGymCatalog.service.js";
 import {
   notifyGymPurchase,
   notifyGymActivated,
@@ -40,14 +42,45 @@ import type {
 } from "../types/index.js";
 import { TRIAL_CONVERT_WINDOW_MS } from "../../../constants/index.js";
 
-
 const asPopulatedGymPlan = (ref: unknown): PopulatedGymPlanRef | null =>
   ref && typeof ref === "object" ? (ref as PopulatedGymPlanRef) : null;
 
 const asPopulatedGymBusiness = (ref: unknown): PopulatedGymBusinessRef | null =>
   ref && typeof ref === "object" ? (ref as PopulatedGymBusinessRef) : null;
 
-// calculateEndDate is in ../../../utils/membershipDate.util.js (imported above).
+const TERM_MONTHS = new Set([1, 3, 6]);
+
+const chosenTermMonths = (raw: unknown) => {
+  const months = Number(raw);
+  return TERM_MONTHS.has(months) ? months : null;
+};
+
+const monthsCoveredByPlan = (plan: ServiceParams | null | undefined) => {
+  const count = Number(plan?.duration) || 1;
+  const unit = String(plan?.durationUnit || "MONTHS").toUpperCase();
+  if (unit === "YEARS") return Math.max(1, count * 12);
+  if (unit === "DAYS") return Math.max(1, count / 30);
+  return Math.max(1, count);
+};
+
+const accessLength = (
+  membership: ServiceParams | null | undefined,
+  plan: ServiceParams | null | undefined,
+) => {
+  if (membership?.purchasedDuration) {
+    return {
+      duration: Number(membership.purchasedDuration) || 1,
+      durationUnit: String(membership.purchasedDurationUnit || "MONTHS"),
+    };
+  }
+  if (plan?.isFreeTrial && plan.trialDuration) {
+    return { duration: Number(plan.trialDuration) || 1, durationUnit: "DAYS" };
+  }
+  return {
+    duration: Number(plan?.duration) || 1,
+    durationUnit: String(plan?.durationUnit || "MONTHS"),
+  };
+};
 // Keep the named re-export so callers that imported it from here continue to work.
 export { calculateEndDate } from "../../../utils/membershipDate.util.js";
 
@@ -420,12 +453,11 @@ export const updateMembership = async ({ businessId, membershipId, updateData }:
   // If transitioning to ACTIVE and startDate was not set, auto-initialize startDate and endDate
   if (newStatus === "ACTIVE" && !membership.startDate && !updates.startDate) {
     const plan = await MembershipPlan.findOne({ _id: membership.planId, businessId }).lean();
-    const duration = plan ? (plan.isFreeTrial && plan.trialDuration ? plan.trialDuration : plan.duration) : 1;
-    const durationUnit = plan ? (plan.isFreeTrial && plan.trialDuration ? "DAYS" : plan.durationUnit) : "MONTHS";
+    const access = accessLength(membership as ServiceParams, plan as ServiceParams | null);
     const startDate = new Date();
     membership.startDate = startDate;
     if (!updates.endDate && !membership.endDate) {
-      membership.endDate = calculateEndDate(startDate, duration, durationUnit);
+      membership.endDate = calculateEndDate(startDate, access.duration, access.durationUnit);
     }
   }
 
@@ -690,6 +722,28 @@ export const renewMembership = async ({ businessId, membershipId }: ServiceParam
   return renewed.toObject();
 };
 
+/** If Razorpay already captured this pending order, mark it paid so checkout is not opened again. */
+const recoverCapturedGymOrder = async (payment: ServiceParams | null | undefined) => {
+  if (!payment?.gatewayOrderId) return false;
+  if (process.env.NODE_ENV === "test" || process.env.MOCK_RAZORPAY === "true") return false;
+  try {
+    const order = (await fetchOrder(String(payment.gatewayOrderId))) as ServiceParams;
+    if (String(order.status) !== "paid") return false;
+    const expectedPaise = Math.round(Number(payment.finalAmount) * 100);
+    if (Number(order.amount) !== expectedPaise) return false;
+    const notes = (order.notes as ServiceParams) || {};
+    if (notes.membershipId && String(notes.membershipId) !== String(payment.membershipId)) return false;
+    payment.status = "SUCCESS";
+    payment.paidAt = new Date();
+    if (!payment.transactionId) payment.transactionId = String(payment.gatewayOrderId);
+    await payment.save();
+    return true;
+  } catch (error: unknown) {
+    logger.warn("[purchaseMembership] could not recover Razorpay order:", getErrorMessage(error));
+    return false;
+  }
+};
+
 /**
  * Customer-facing online purchase of gym membership plan (Razorpay Orders).
  */
@@ -707,6 +761,8 @@ export const purchaseMembership = async ({ userId, userAuth, purchaseData }: Ser
     gender: bodyGender,
     notes,
     autoRenew: purchaseAutoRenew,
+    contribution: contributionRaw,
+    durationMonths: durationMonthsRaw,
   } = pd;
 
   if (!businessId) {
@@ -738,6 +794,9 @@ export const purchaseMembership = async ({ userId, userAuth, purchaseData }: Ser
   }
   if (plan.status === "DRAFT" || plan.status !== "ACTIVE") {
     throw codedError("plan_not_active", "Cannot purchase a draft or inactive membership plan.");
+  }
+  if (!isPublicPlanVisibility(plan.visibility)) {
+    throw codedError("forbidden", "This plan is not available for public purchase.");
   }
 
   const user = userId ? await UserModel.findOne({ uid: userId }).lean() : null;
@@ -933,6 +992,13 @@ export const purchaseMembership = async ({ userId, userAuth, purchaseData }: Ser
     }
   }
 
+  const termMonths = plan.isFreeTrial ? null : chosenTermMonths(durationMonthsRaw);
+  const catalogPrice = plan.isFreeTrial ? 0 : Number(plan.price) || 0;
+  const termPrice = termMonths
+    ? Math.round((catalogPrice / monthsCoveredByPlan(plan as ServiceParams)) * termMonths)
+    : catalogPrice;
+
+  // Coupon (only apply / increment when starting a fresh membership)
   let discountAmount = Number(membership?.discountAmount) || 0;
   let couponDoc = null;
   const codeToValidate = String(couponCode || "").trim();
@@ -944,7 +1010,7 @@ export const purchaseMembership = async ({ userId, userAuth, purchaseData }: Ser
         businessId: business._id,
         code: codeToValidate,
         planId: plan._id,
-        orderAmount: plan.price,
+        orderAmount: termPrice,
       });
       if (couponRes.valid) {
         discountAmount = couponRes.discountAmount || 0;
@@ -961,14 +1027,20 @@ export const purchaseMembership = async ({ userId, userAuth, purchaseData }: Ser
     couponDoc = { _id: membership.couponId };
   }
 
-  const basePrice = plan.isFreeTrial ? 0 : Number(plan.price) || 0;
-  const finalAmount = Math.max(0, Math.round(basePrice - discountAmount));
+  const basePrice = termPrice;
+  const contribution = Math.min(100000, Math.max(0, Math.round(Number(contributionRaw) || 0)));
+  const finalAmount = Math.max(0, Math.round(basePrice - discountAmount)) + contribution;
   const now = new Date();
 
   if (membership) {
-    membership.priceAtPurchase = plan.price;
+    membership.priceAtPurchase = termPrice;
     membership.discountAmount = discountAmount;
     membership.finalAmount = finalAmount;
+    if (termMonths) {
+      membership.purchasedDuration = termMonths;
+      membership.purchasedDurationUnit = "MONTHS";
+    }
+    if (userId && !membership.customerUid) membership.customerUid = String(userId);
     if (couponDoc?._id) membership.couponId = couponDoc._id;
     if (purchaseAutoRenew !== undefined) membership.autoRenew = Boolean(purchaseAutoRenew);
     const isUnpaidTrialConvert =
@@ -987,11 +1059,13 @@ export const purchaseMembership = async ({ userId, userAuth, purchaseData }: Ser
       activatedAt: null,
       startDate: null,
       endDate: null,
-      priceAtPurchase: plan.price,
+      priceAtPurchase: termPrice,
       discountAmount,
       finalAmount,
+      ...(termMonths ? { purchasedDuration: termMonths, purchasedDurationUnit: "MONTHS" } : {}),
       couponId: couponDoc?._id || couponId || null,
       autoRenew: Boolean(purchaseAutoRenew),
+      customerUid: userId ? String(userId) : null,
       notes: notes || `Purchased online by user ${userId || "guest"}`,
     });
   }
@@ -1051,6 +1125,38 @@ export const purchaseMembership = async ({ userId, userAuth, purchaseData }: Ser
     };
   }
 
+  const pendingPayment = await Payment.findOne({
+    membershipId: membership._id,
+    status: "PENDING",
+  }).sort({ createdAt: -1 });
+
+  if (await recoverCapturedGymOrder(pendingPayment)) {
+    await incrementCouponUsageForMembership(pendingPayment?.membershipId);
+    await notifyGymPurchase({
+      membership,
+      member,
+      customerUid: userId,
+      planName: plan.name,
+      isTrial: false,
+      notifyOwner: Number(pendingPayment?.finalAmount) > 0,
+    });
+    return {
+      membership: membership.toObject ? membership.toObject() : membership,
+      payment: pendingPayment?.toObject ? pendingPayment.toObject() : pendingPayment,
+      member: memberPayload,
+      isFree: false,
+      alreadyPaid: true,
+      reusedMembership,
+      order: null as null,
+      amount: finalAmount,
+      currency: "INR",
+      key: (process.env.RAZORPAY_KEY_ID || "").trim(),
+      checkoutText: "Pay securely with Razorpay",
+      message: "Payment successful. Your plan will activate on first check-in.",
+    };
+  }
+
+  // Paid: reuse PENDING payment row on retry; always mint a fresh Razorpay order
   const receipt = `gym_${business._id}_${Date.now()}`.slice(0, 40);
   const amountInPaise = Math.round(finalAmount * 100);
 
@@ -1223,15 +1329,8 @@ export const activateMembershipOnCheckIn = async (
   }
 
   const plan = asPopulatedGymPlan(oldestPending.planId);
-  const duration =
-    plan && plan.isFreeTrial && plan.trialDuration
-      ? plan.trialDuration
-      : plan?.duration || 1;
-  const durationUnit =
-    plan && plan.isFreeTrial && plan.trialDuration
-      ? "DAYS"
-      : plan?.durationUnit || "MONTHS";
-  const endDate = calculateEndDate(now, duration, durationUnit);
+  const access = accessLength(oldestPending as ServiceParams, plan as ServiceParams | null);
+  const endDate = calculateEndDate(now, access.duration, access.durationUnit);
 
   const activatedDoc = await Membership.findOneAndUpdate(
     {

@@ -65,7 +65,7 @@ const resolveBackendUrl = () => {
       if (apiBaseUrl && !apiBaseUrl.includes("127.0.0.1") && !apiBaseUrl.includes("localhost")) {
         return apiBaseUrl;
       }
-      return "https://apiv2.stron.in";
+      return "http://apiv2.stron.in";
     }
 
     // Emulator / simulator
@@ -80,7 +80,7 @@ const resolveBackendUrl = () => {
     }
   }
 
-  return apiBaseUrl || "https://apiv2.stron.in";
+  return apiBaseUrl || "http://apiv2.stron.in";
 };
 
 export const getBackendUrl = (): string => resolveBackendUrl();

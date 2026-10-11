@@ -94,6 +94,7 @@ export const getRevenueAnalytics = async (req: Request, res: Response) => {
           months: createStatic12RevenueMonths(year),
           financialHighlights: {
             yoyGrowthPercent: 0,
+            formattedYoYGrowth: "0%",
             avgMonthlyRevenue: 0,
             formattedAvgMonthly: "₹0",
             topPerformingMonth: { month: null, revenue: 0, formattedRevenue: "₹0" },

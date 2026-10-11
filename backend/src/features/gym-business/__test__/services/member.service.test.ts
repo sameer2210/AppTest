@@ -4,7 +4,7 @@ import mongoose from "mongoose";
 import request from "supertest";
 import app from "@/app.js";
 import memberService from "@/features/gym-business/services/member.service.js";
-import { Membership } from "@/features/gym-business/index.js";
+import { Membership, Payment } from "@/features/gym-business/index.js";
 import { createTestMongo, type TestObjectId, type TestToken } from "@/test-helpers/helpers.js";
 import { createGymTestContext, createTestPlan } from "@/features/gym-business/__test__/helpers.js";
 import { UserModel } from "@/features/identity-auth/index.js";
@@ -299,6 +299,76 @@ describe("gym-business: member.service", () => {
     expect(summary.expired).toBe(2);
     expect(expiredList.members).toHaveLength(2);
     expect(summary.expired).toBe(expiredList.members.length);
+
+    const counted = await memberService.createMember({
+      businessId: ctx.businessId,
+      memberData: { name: "Counted Member", phone: "9111100001" },
+    });
+    const blank = await memberService.createMember({
+      businessId: ctx.businessId,
+      memberData: { name: "Empty Member", phone: "9111100002" },
+    });
+    const countedPlan = await createTestPlan(ctx.businessId, { name: "Count Plan" });
+    const start = new Date();
+    const end = new Date(start.getTime() + 30 * 86400000);
+    await Membership.create([
+      {
+        businessId: ctx.businessId,
+        memberId: counted._id,
+        planId: countedPlan._id,
+        status: "ACTIVE",
+        startDate: start,
+        endDate: end,
+        priceAtPurchase: 100,
+        finalAmount: 100,
+      },
+      {
+        businessId: ctx.businessId,
+        memberId: counted._id,
+        planId: countedPlan._id,
+        status: "ACTIVE",
+        startDate: start,
+        endDate: end,
+        priceAtPurchase: 100,
+        finalAmount: 100,
+      },
+      {
+        businessId: ctx.businessId,
+        memberId: counted._id,
+        planId: countedPlan._id,
+        status: "CANCELLED",
+        priceAtPurchase: 100,
+        finalAmount: 100,
+      },
+    ]);
+    const payment = {
+      businessId: ctx.businessId,
+      memberId: counted._id,
+      amount: 100,
+      finalAmount: 100,
+      currency: "INR",
+      method: "CASH" as const,
+      source: "MANUAL" as const,
+    };
+    await Payment.create([
+      { ...payment, status: "SUCCESS" },
+      { ...payment, status: "SUCCESS" },
+      { ...payment, status: "SUCCESS" },
+      { ...payment, status: "PENDING" },
+    ]);
+    const purchaseList = await memberService.listMembers({
+      businessId: ctx.businessId,
+      paginationParams: { page: 1, limit: 50 },
+    });
+    const countedRow = purchaseList.members.find(
+      (row: { name?: string }) => row.name === "Counted Member",
+    );
+    const emptyRow = purchaseList.members.find(
+      (row: { name?: string }) => row.name === "Empty Member",
+    );
+    expect(countedRow?.purchaseCount).toBe(5);
+    expect(emptyRow?.purchaseCount).toBe(0);
+
     expect(autoRenewMembers.map((m) => String(m._id)).sort()).toEqual(
       autoRenewList.members.map((m: { _id: unknown }) => String(m._id)).sort(),
     );

@@ -319,19 +319,24 @@ const ProfileActivityChart = ({
           style={styles.navButton}
           activeOpacity={0.7}
         >
-          <Ionicons name="chevron-back" size={20} color="#000000" />
+          <Ionicons name="chevron-back" size={18} color="#000000" />
         </TouchableOpacity>
-        <CustomText
-          text={rangeLabel}
-          style={[fontTextStyles.body, styles.rangeLabelText]}
-        />
+        <View style={styles.rangeLabelContainer}>
+          <CustomText
+            text={rangeLabel}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+            style={[fontTextStyles.body, styles.rangeLabelText]}
+          />
+        </View>
         <TouchableOpacity
           onPress={onNext}
           disabled={!canNext}
           style={[styles.navButton, !canNext && styles.disabledNavButton]}
           activeOpacity={0.7}
         >
-          <Ionicons name="chevron-forward" size={20} color="#000000" />
+          <Ionicons name="chevron-forward" size={18} color="#000000" />
         </TouchableOpacity>
       </View>
     </View>
@@ -453,14 +458,14 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginTop: 32,
-    paddingHorizontal: 24,
+    paddingHorizontal: 4,
     paddingBottom: 4,
   },
   navButton: {
     backgroundColor: "#FFFFFF",
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000000",
@@ -472,10 +477,17 @@ const styles = StyleSheet.create({
   disabledNavButton: {
     opacity: 0.4,
   },
+  rangeLabelContainer: {
+    flex: 1,
+    marginHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   rangeLabelText: {
     color: "#FFFFFF",
-    fontSize: 16,
-    letterSpacing: 0.5,
+    fontSize: 15,
+    letterSpacing: 0.2,
+    textAlign: "center",
   },
 });
 

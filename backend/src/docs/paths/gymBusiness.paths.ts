@@ -1339,10 +1339,11 @@ export const gymBusinessPaths = {
       tags: ["Gym Business - Operations & Billing"],
       summary: "WhatsApp Cloud API webhook",
       description:
-        "Public webhook. Verifies X-Hub-Signature-256 with WHATSAPP_APP_SECRET. Persists webhookEvents and enqueues BullMQ jobs, then returns 200 immediately. Workers apply inbound messages and SENT/DELIVERED/READ/FAILED statuses.",
+        "Public webhook. Verifies X-Hub-Signature-256 with WHATSAPP_APP_SECRET. Persists webhookEvents and enqueues BullMQ jobs, then returns 200. A 503 means the event was not queued, so Meta should retry.",
       responses: {
         200: { description: "Accepted." },
         403: { $ref: "#/components/responses/Forbidden" },
+        503: { description: "Event was not queued." },
       },
     },
   },

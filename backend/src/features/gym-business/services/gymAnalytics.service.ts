@@ -566,12 +566,28 @@ export const getRevenueAnalytics = async ({
     createdAt: { $gte: startOfYear, $lte: endOfYear },
   };
 
-  const [monthlyAgg, methodAgg] = await Promise.all([
+  const priorYear = selectedYear - 1;
+  const startOfPriorYear = new Date(priorYear, 0, 1);
+  const endOfPriorYear = new Date(priorYear, 11, 31, 23, 59, 59, 999);
+
+  const now = new Date();
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  const dayOfWeek = (now.getDay() + 6) % 7;
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - dayOfWeek);
+  startOfWeek.setHours(0, 0, 0, 0);
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  endOfWeek.setHours(23, 59, 59, 999);
+
+  const [monthlyAgg, methodAgg, priorYearAgg, currentMonthPayments, currentWeekPayments] = await Promise.all([
     Payment.aggregate([
       { $match: match },
       {
         $group: {
-          _id: { $month: "$createdAt" }, // 1 to 12
+          _id: { $month: "$createdAt" },
           totalRevenue: { $sum: "$finalAmount" },
           totalTransactions: { $sum: 1 },
           manualCount: {
@@ -587,7 +603,75 @@ export const getRevenueAnalytics = async ({
       { $match: match },
       { $group: { _id: "$method", count: { $sum: 1 } } },
     ]),
+    Payment.aggregate([
+      {
+        $match: {
+          businessId: bId,
+          status: "SUCCESS",
+          createdAt: { $gte: startOfPriorYear, $lte: endOfPriorYear },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: "$finalAmount" },
+        },
+      },
+    ]),
+    Payment.aggregate([
+      {
+        $match: {
+          businessId: bId,
+          status: "SUCCESS",
+          createdAt: { $gte: currentMonthStart, $lte: currentMonthEnd },
+        },
+      },
+      {
+        $project: {
+          finalAmount: 1,
+          day: { $dayOfMonth: "$createdAt" },
+        },
+      },
+    ]),
+    Payment.aggregate([
+      {
+        $match: {
+          businessId: bId,
+          status: "SUCCESS",
+          createdAt: { $gte: startOfWeek, $lte: endOfWeek },
+        },
+      },
+      {
+        $project: {
+          finalAmount: 1,
+          dayOfWeek: { $dayOfWeek: "$createdAt" },
+        },
+      },
+    ]),
   ]);
+
+  const daysInCurrentMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const monthDailyRevenue = new Array(daysInCurrentMonth).fill(0);
+  const weeklyBreakdown = [0, 0, 0, 0];
+  for (const payment of currentMonthPayments) {
+    const amount = payment.finalAmount || 0;
+    if (payment.day >= 1 && payment.day <= daysInCurrentMonth) {
+      monthDailyRevenue[payment.day - 1] += amount;
+    }
+    if (payment.day <= 7) weeklyBreakdown[0] += amount;
+    else if (payment.day <= 14) weeklyBreakdown[1] += amount;
+    else if (payment.day <= 21) weeklyBreakdown[2] += amount;
+    else weeklyBreakdown[3] += amount;
+  }
+
+  const currentWeekBreakdown = [0, 0, 0, 0, 0, 0, 0];
+  for (const payment of currentWeekPayments) {
+    const amount = payment.finalAmount || 0;
+    const idx = ((payment.dayOfWeek || 1) + 5) % 7;
+    currentWeekBreakdown[idx] += amount;
+  }
+
+  const priorYearEarnings = priorYearAgg[0]?.totalRevenue || 0;
 
   const revenueMap = new Map();
   for (const item of monthlyAgg) {
@@ -596,7 +680,7 @@ export const getRevenueAnalytics = async ({
 
   let totalEarnings = 0;
   let topMonthRevenue = 0;
-  let topMonthName = "December";
+  let topMonthName: string | null = null;
 
   const months = MONTH_NAMES.map((name, index) => {
     const monthNumber = index + 1;
@@ -628,18 +712,47 @@ export const getRevenueAnalytics = async ({
   const activeMonthsCount = months.filter((m) => m.value > 0).length || 1;
   const avgMonthlyRevenue = Math.round(totalEarnings / Math.max(activeMonthsCount, 1));
 
+  let yoyGrowthPercent: number | null = 0;
+  let formattedYoYGrowth = "0%";
+
+  if (priorYearEarnings === 0 && totalEarnings === 0) {
+    yoyGrowthPercent = 0;
+    formattedYoYGrowth = "0%";
+  } else if (priorYearEarnings === 0 && totalEarnings > 0) {
+    yoyGrowthPercent = null;
+    formattedYoYGrowth = "New";
+  } else if (priorYearEarnings > 0 && totalEarnings === 0) {
+    yoyGrowthPercent = -100;
+    formattedYoYGrowth = "-100%";
+  } else {
+    const rawGrowth = ((totalEarnings - priorYearEarnings) / priorYearEarnings) * 100;
+    yoyGrowthPercent = parseFloat(rawGrowth.toFixed(1));
+    formattedYoYGrowth = rawGrowth > 0 ? `+${yoyGrowthPercent}%` : `${yoyGrowthPercent}%`;
+  }
+
+  const quarterlyBreakdown = [0, 0, 0, 0];
+  months.forEach((month, idx) => {
+    const quarterIndex = Math.floor(idx / 3);
+    quarterlyBreakdown[quarterIndex] += month.value || 0;
+  });
+
   return {
     year: String(selectedYear),
     totalEarnings,
     formattedTotal: formatCurrencyLakhs(totalEarnings),
     months,
+    weeklyBreakdown,
+    currentWeekBreakdown,
+    monthDailyRevenue,
+    quarterlyBreakdown,
     paymentMethods: buildPaymentMethodPercents(methodAgg),
     financialHighlights: {
-      yoyGrowthPercent: 0,
+      yoyGrowthPercent,
+      formattedYoYGrowth,
       avgMonthlyRevenue,
       formattedAvgMonthly: formatCurrencyLakhs(avgMonthlyRevenue),
       topPerformingMonth: {
-        month: topMonthName,
+        month: topMonthRevenue > 0 ? topMonthName : null,
         revenue: topMonthRevenue,
         formattedRevenue: formatCurrencyLakhs(topMonthRevenue),
       },

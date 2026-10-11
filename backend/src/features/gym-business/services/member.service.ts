@@ -430,7 +430,39 @@ export const listMembers = async ({ businessId, paginationParams }: ServiceParam
 
   const [aggResult] = await Member.aggregate(pipeline);
   const total = aggResult?.totalCount?.[0]?.count || 0;
-  const members = aggResult?.paginatedData || [];
+  const members = (aggResult?.paginatedData || []) as Array<{
+    _id?: mongoose.Types.ObjectId;
+    purchaseCount?: number;
+  }>;
+  const memberIds = members.flatMap((member) => (member._id ? [member._id] : []));
+  const paymentCounts = new Map<string, number>();
+  const membershipCounts = new Map<string, number>();
+  if (memberIds.length > 0) {
+    const [paymentGroups, membershipGroups] = await Promise.all([
+      Payment.aggregate<{ _id: mongoose.Types.ObjectId; count: number }>([
+        { $match: { businessId: bId, memberId: { $in: memberIds }, status: "SUCCESS" } },
+        { $group: { _id: "$memberId", count: { $sum: 1 } } },
+      ]),
+      Membership.aggregate<{ _id: mongoose.Types.ObjectId; count: number }>([
+        {
+          $match: {
+            businessId: bId,
+            memberId: { $in: memberIds },
+            status: { $ne: "CANCELLED" },
+          },
+        },
+        { $group: { _id: "$memberId", count: { $sum: 1 } } },
+      ]),
+    ]);
+    for (const row of paymentGroups) paymentCounts.set(String(row._id), Number(row.count) || 0);
+    for (const row of membershipGroups) {
+      membershipCounts.set(String(row._id), Number(row.count) || 0);
+    }
+  }
+  for (const member of members) {
+    const key = String(member._id);
+    member.purchaseCount = (paymentCounts.get(key) || 0) + (membershipCounts.get(key) || 0);
+  }
 
   return {
     members,

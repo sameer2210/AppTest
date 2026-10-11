@@ -7,11 +7,23 @@ import {
 } from "../../../services/analytics.service.js";
 import { logger } from "../../../utils/logger.util.js";
 
+/** FCM data values must be strings. */
+const toFcmData = (data?: Record<string, unknown> | null): Record<string, string> => {
+  const out: Record<string, string> = { type: "remote_push" };
+  if (!data) return out;
+  for (const [key, value] of Object.entries(data)) {
+    if (value == null) continue;
+    out[key] = typeof value === "string" ? value : String(value);
+  }
+  return out;
+};
+
 export const sendNotificationToUser = async (
   userId: string,
   title: string,
   body: string,
   imageUrl: string | undefined = undefined,
+  data: Record<string, unknown> | undefined = undefined,
 ) => {
   if (!userId || userId.startsWith("bot_")) {
     return;
@@ -25,9 +37,11 @@ export const sendNotificationToUser = async (
     }
 
     const token = fcmDoc.token;
+    const fcmData = toFcmData(data);
 
     const message: Message = {
       notification: { title, body },
+      data: fcmData,
       android: {
         priority: "high" as const,
         notification: {
@@ -76,6 +90,7 @@ export const sendNotificationToToken = async (
   title: string,
   body: string,
   imageUrl?: string,
+  data?: Record<string, unknown>,
 ) => {
   if (!token) {
     return;
@@ -83,6 +98,7 @@ export const sendNotificationToToken = async (
   try {
     const message: Message = {
       notification: { title, body },
+      data: toFcmData(data),
       android: {
         priority: "high" as const,
         notification: {

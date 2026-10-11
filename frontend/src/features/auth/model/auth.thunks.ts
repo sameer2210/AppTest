@@ -13,7 +13,7 @@ import { createMinimalUser, isMongoObjectIdString, type StronUser } from "@/mode
 import { RevenueCatService } from "@/features/payments";
 import {
   ensureValidAccessToken,
-  wasLastAuthRecoveryNetworkFailure,
+  wasLastAuthRecoveryTransient,
 } from "@/services/core/apiClient.service";
 import { isSessionExpiryInFlight } from "@/services/core/sessionExpiry";
 import {
@@ -85,7 +85,7 @@ export const bootstrapAuth = createAsyncThunk<void, void, { state: RootState }>(
       const sessionOk = await withBootstrapTimeout("Session restore", ensureValidAccessToken()).catch(
         () => false,
       );
-      if (!sessionOk && !wasLastAuthRecoveryNetworkFailure()) {
+      if (!sessionOk && !wasLastAuthRecoveryTransient()) {
         // ensureValidAccessToken already kicked notifySessionExpired when recovery
         // failed for auth reasons; only hard-clear if that path hasn't started.
         if (!isSessionExpiryInFlight()) {

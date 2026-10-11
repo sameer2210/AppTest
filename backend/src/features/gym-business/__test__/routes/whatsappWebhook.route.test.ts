@@ -6,6 +6,7 @@ import mongoose from "mongoose";
 import app from "@/app.js";
 import { WhatsappMessage, WebhookEvent } from "@/features/gym-business/index.js";
 import { drainQueues } from "@/test-helpers/inMemoryQueue.js";
+import { getQueueAdapter } from "@/queues/adapter.js";
 import { createTestMongo } from "@/test-helpers/helpers.js";
 import { createGymTestContext, createTestMember } from "../helpers.js";
 
@@ -173,5 +174,52 @@ describe("gym-business: whatsapp webhook", () => {
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
     expect(await WebhookEvent.countDocuments({ eventKey: "message:wamid.dup-1" })).toBe(1);
+  });
+
+  it("returns 503 when enqueue fails and queues the stored event on retry", async () => {
+    const adapter = getQueueAdapter();
+    const originalAdd = adapter.add.bind(adapter);
+    let attempts = 0;
+    adapter.add = async (...args) => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("redis down");
+      return originalAdd(...args);
+    };
+
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                statuses: [{ id: "wamid.retry-503", status: "sent" }],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const raw = JSON.stringify(payload);
+    const digest = createHmac("sha256", "app-secret").update(raw).digest("hex");
+    const headers = {
+      "X-Hub-Signature-256": `sha256=${digest}`,
+      "Content-Type": "application/json",
+    };
+
+    try {
+      const first = await request(app).post("/api/v1/webhooks/whatsapp").set(headers).send(raw);
+      expect(first.status).toBe(503);
+      const stored = await WebhookEvent.findOne({ eventKey: "status:wamid.retry-503:sent" }).lean();
+      expect(stored?.status).toBe("RECEIVED");
+      expect(stored?.jobId).toBeFalsy();
+
+      const second = await request(app).post("/api/v1/webhooks/whatsapp").set(headers).send(raw);
+      expect(second.status).toBe(200);
+      const retried = await WebhookEvent.findOne({ eventKey: "status:wamid.retry-503:sent" }).lean();
+      expect(retried?.jobId).toBeTruthy();
+      expect(await WebhookEvent.countDocuments({ eventKey: "status:wamid.retry-503:sent" })).toBe(1);
+    } finally {
+      adapter.add = originalAdd;
+    }
   });
 });

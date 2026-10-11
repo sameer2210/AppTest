@@ -310,6 +310,8 @@ export const searchOpponentsService = async ({
       isOnline: false,
       lastActiveDate: user.lastActive,
       type: "shadow",
+      shortBio: (user as any).shortBio || null,
+      bio: (user as any).shortBio || (user as any).about || null,
       shadowData: {
         uid: user.uid,
         username: user.username,
@@ -336,6 +338,8 @@ export const searchOpponentsService = async ({
     isOnline: true,
     lastActiveDate: athlete.shadowData?.lastActiveDate || new Date().toISOString(),
     type: "shadow",
+    shortBio: athlete.bio || null,
+    bio: athlete.bio || null,
     shadowData: athlete.shadowData,
   }));
 
@@ -664,6 +668,21 @@ export const getStepRaceHistoryService = async ({
     const userSteps = r.userSteps || 0;
     const oppSteps = r.opponentSteps || 1000;
     const stepDiff = Math.abs(userSteps - oppSteps);
+    const targetSteps = Number(r.targetSteps) || 1000;
+    const paceSeconds = projectedPaceSeconds(r.userTimeSeconds, userSteps, targetSteps);
+    const formatPace = (s: number) => {
+      const mins = Math.floor(s / 60);
+      const secs = s % 60;
+      return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    };
+    const oppPace = Number(r.opponentPaceSeconds) || DEFAULT_PACE_SECONDS;
+    const finalPace = paceSeconds != null ? formatPace(paceSeconds) : undefined;
+    let paceDiff: string | undefined;
+    if (paceSeconds != null && oppPace > 0) {
+      const raw = Math.round(((oppPace - paceSeconds) / oppPace) * 100);
+      paceDiff =
+        raw > 0 ? `${raw}% Faster` : raw < 0 ? `${Math.abs(raw)}% Slower` : "Equal Pace";
+    }
 
     return {
       id: r.raceId || String(r._id),
@@ -680,6 +699,9 @@ export const getStepRaceHistoryService = async ({
             day: "numeric",
           })
         : "Recent",
+      finalPace,
+      paceDiff,
+      paceSeconds: paceSeconds ?? undefined,
     };
   });
 };

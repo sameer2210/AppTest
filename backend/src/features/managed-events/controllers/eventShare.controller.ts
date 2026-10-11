@@ -17,7 +17,7 @@ const escapeHtml = (value: unknown) =>
 /**
  * Public smart-link for shared events.
  * Tries to open the STRON app; if not installed, falls back to the store.
- * Served at both /event/:key and /api/event/:key (nginx typically only proxies /api).
+ * Served at both /event/:key and /api/event/:key. Shared links use /event/:key.
  */
 export const openSharedEventPage = async (req: Request, res: Response) => {
   const key = String(req.params.key || "")
@@ -88,14 +88,12 @@ const renderPage = ({
 }) => {
   const safeTitle = escapeHtml(title);
   const safeSubtitle = escapeHtml(subtitle);
-  const apiBase = String(process.env.PUBLIC_API_BASE_URL || "https://api.stron.in").replace(
-    /\/$/,
-    "",
-  );
-  // Prefer /api/event so the page works behind nginx that only proxies /api/*.
+  const publicBase = String(
+    process.env.PUBLIC_SHARE_BASE_URL || process.env.PUBLIC_MARKETING_URL || "https://stron.in",
+  ).replace(/\/$/, "");
   const canonicalUrl = eventKey
-    ? `${apiBase}/api/event/${encodeURIComponent(eventKey)}`
-    : apiBase;
+    ? `${publicBase}/event/${encodeURIComponent(eventKey)}`
+    : publicBase;
   const customScheme = eventKey
     ? `stron://event/${encodeURIComponent(eventKey)}`
     : "stron://home";

@@ -22,7 +22,10 @@ export const createOrderHandler = async (req: Request, res: Response) => {
       ticketTypeId: req.body?.ticketTypeId ?? null,
       currentStepCount: req.body?.currentStepCount ?? null,
       participantInfo: req.body?.participantInfo ?? null,
+      participants: req.body?.participants ?? null,
+      quantity: req.body?.quantity ?? null,
       couponCode: req.body?.couponCode ?? null,
+      contribution: req.body?.contribution ?? null,
     });
     trackEvent(ANALYTICS_EVENTS.TICKET_ORDER_CREATED, {
       user_id: req.user!.uid,

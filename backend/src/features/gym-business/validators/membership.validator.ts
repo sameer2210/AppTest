@@ -73,6 +73,8 @@ export const purchaseMembershipSchema = {
     couponCode: z.string().trim().optional(),
     couponId: optionalObjectIdString(),
     name: z.string().trim().min(1).max(100).optional(),
+    contribution: z.coerce.number().min(0).max(100000).optional(),
+    durationMonths: z.union([z.literal(1), z.literal(3), z.literal(6)]).optional(),
     // phone is intentionally excluded — member identity is always resolved from auth token
     email: z.string().email().optional().nullable(),
     gender: z.enum(["MALE", "FEMALE", "OTHER"]).optional().nullable(),

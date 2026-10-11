@@ -13,18 +13,31 @@ const escapeHtml = (value: unknown) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
+const publicShareBase = () =>
+  String(
+    process.env.PUBLIC_SHARE_BASE_URL || process.env.PUBLIC_MARKETING_URL || "https://stron.in",
+  ).replace(/\/$/, "");
+
+const opinionQuestionId = (req: Request) => {
+  const raw = req.params.questionId;
+  const id = (Array.isArray(raw) ? raw[0] : raw || "").trim();
+  return id && id !== "share" ? id : "";
+};
+
 /**
  * Public smart-link for shared STRON Opinions.
  * Opens the app to Home (opinions card); store fallback if not installed.
- * Served at /opinion/share and /api/opinion/share.
+ * Served at /opinion/:questionId, /opinion/share, and /api/opinion/share.
  */
 export const openSharedOpinionPage = async (req: Request, res: Response) => {
+  const questionId = opinionQuestionId(req);
   const ua = req.headers["user-agent"] || "";
   const isAndroid = /Android/i.test(ua);
   const isIOS = /iPhone|iPad|iPod/i.test(ua);
 
   const playStoreWithRef = `${PLAY_STORE_URL}&referrer=${encodeURIComponent("utm_source=opinion_share")}`;
-  const androidIntent = `intent://opinion#Intent;scheme=stron;package=${ANDROID_PACKAGE};S.browser_fallback_url=${encodeURIComponent(playStoreWithRef)};end`;
+  const opinionPath = questionId ? `opinion/${encodeURIComponent(questionId)}` : "opinion";
+  const androidIntent = `intent://${opinionPath}#Intent;scheme=stron;package=${ANDROID_PACKAGE};S.browser_fallback_url=${encodeURIComponent(playStoreWithRef)};end`;
 
   if (isIOS) {
     return res.redirect(302, APP_STORE_URL);
@@ -34,18 +47,18 @@ export const openSharedOpinionPage = async (req: Request, res: Response) => {
     return res.redirect(302, androidIntent);
   }
 
-  return res.status(200).type("html").send(renderOpinionSharePage());
+  return res.status(200).type("html").send(renderOpinionSharePage(questionId));
 };
 
-const renderOpinionSharePage = () => {
-  const apiBase = String(process.env.PUBLIC_API_BASE_URL || "https://api.stron.in").replace(
-    /\/$/,
-    "",
-  );
-  const canonicalUrl = `${apiBase}/api/opinion/share`;
-  const customScheme = "stron://opinion";
+const renderOpinionSharePage = (questionId = "") => {
+  const canonicalPath = questionId
+    ? `/opinion/${encodeURIComponent(questionId)}`
+    : "/opinion/share";
+  const canonicalUrl = `${publicShareBase()}${canonicalPath}`;
+  const opinionPath = questionId ? `opinion/${encodeURIComponent(questionId)}` : "opinion";
+  const customScheme = `stron://${opinionPath}`;
   const playStoreWithRef = `${PLAY_STORE_URL}&referrer=${encodeURIComponent("utm_source=opinion_share")}`;
-  const androidIntent = `intent://opinion#Intent;scheme=stron;package=${ANDROID_PACKAGE};S.browser_fallback_url=${encodeURIComponent(playStoreWithRef)};end`;
+  const androidIntent = `intent://${opinionPath}#Intent;scheme=stron;package=${ANDROID_PACKAGE};S.browser_fallback_url=${encodeURIComponent(playStoreWithRef)};end`;
 
   const title = "STRON Opinions";
   const subtitle = "Vote with your steps on today's opinion — open in the STRON app.";

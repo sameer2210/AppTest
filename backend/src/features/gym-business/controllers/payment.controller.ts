@@ -100,8 +100,8 @@ export const verifyOnlinePayment = async (req: Request, res: Response) => {
     // Tenant only from middleware — never trust body.businessId (V1 §5).
     const data = await paymentService.verifyOnlinePayment({
       businessId: req.businessId,
+      customerUid: req.user?.uid || null,
       verificationData: req.body,
-      hasGymStaffContext: Boolean(req.businessId),
     });
     return res.status(200).json({ success: true, data });
   } catch (error) {

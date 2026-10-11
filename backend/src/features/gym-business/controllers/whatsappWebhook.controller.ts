@@ -27,6 +27,11 @@ export const handleWhatsappWebhook = async (req: Request, res: Response) => {
     logger.warn("[whatsapp] webhook enqueue failed", {
       message: error instanceof Error ? error.message : String(error),
     });
+    return res.status(503).json({
+      success: false,
+      code: "service_unavailable",
+      message: "Webhook was not queued.",
+    });
   }
   return res.status(200).json({ success: true });
 };

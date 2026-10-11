@@ -36,6 +36,10 @@ let refreshPromise: Promise<boolean> | null = null;
 let recoverPromise: Promise<boolean> | null = null;
 let lastAuthGateMessage = "Authentication required. Please sign in again.";
 let lastRecoveryFailedDueToNetwork = false;
+/** Backend auth rate-limit — avoid hammering /api/auth/exchange-token. */
+let lastRecoveryFailedDueToRateLimit = false;
+let exchangeRateLimitUntilMs = 0;
+const EXCHANGE_RATE_LIMIT_COOLDOWN_MS = 5 * 60 * 1000;
 
 const isNetworkError = (error: unknown) => {
   const axiosError = error as { message?: string; code?: string };
@@ -45,6 +49,19 @@ const isNetworkError = (error: unknown) => {
     axiosError?.code === "ECONNABORTED" ||
     axiosError?.message?.includes("timed out") === true
   );
+};
+
+const isRateLimitError = (error: unknown) => {
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  return status === 429;
+};
+
+const isExchangeRateLimited = () => Date.now() < exchangeRateLimitUntilMs;
+
+/** Clear exchange-token cooldown after a successful login / token mint. */
+export const clearAuthExchangeRateLimit = () => {
+  exchangeRateLimitUntilMs = 0;
+  lastRecoveryFailedDueToRateLimit = false;
 };
 
 const withTimeout = async <T>(
@@ -80,6 +97,7 @@ const refreshAccessToken = async (): Promise<boolean> => {
         const accessToken = response.data?.accessToken as string | undefined;
         const newRefreshToken = response.data?.refreshToken as string | undefined;
         if (accessToken) {
+          clearAuthExchangeRateLimit();
           await TokenStorage.saveAccessToken(accessToken);
           if (newRefreshToken) {
             await TokenStorage.saveRefreshToken(newRefreshToken);
@@ -108,6 +126,13 @@ export const exchangeFirebaseToken = async (
   const user = getFirebaseAuth().currentUser;
   if (!user) return false;
 
+  if (isExchangeRateLimited()) {
+    lastRecoveryFailedDueToRateLimit = true;
+    lastAuthGateMessage =
+      "Too many sign-in attempts. Please wait a few minutes, then try again.";
+    return false;
+  }
+
   try {
     // Prefer cached token first; forceRefresh hits Google servers and
     // is much slower / flaky on poor mobile networks.
@@ -128,11 +153,18 @@ export const exchangeFirebaseToken = async (
     const accessToken = response.data?.accessToken as string | undefined;
     const newRefreshToken = response.data?.refreshToken as string | undefined;
     if (accessToken && newRefreshToken) {
+      clearAuthExchangeRateLimit();
       await TokenStorage.saveTokens(accessToken, newRefreshToken);
       return true;
     }
   } catch (error) {
-    if (isNetworkError(error)) {
+    if (isRateLimitError(error)) {
+      lastRecoveryFailedDueToRateLimit = true;
+      exchangeRateLimitUntilMs = Date.now() + EXCHANGE_RATE_LIMIT_COOLDOWN_MS;
+      lastAuthGateMessage =
+        "Too many sign-in attempts. Please wait a few minutes, then try again.";
+      logError("Firebase token exchange rate-limited (429)", error);
+    } else if (isNetworkError(error)) {
       lastRecoveryFailedDueToNetwork = true;
       lastAuthGateMessage = `Cannot reach API at ${STRON_BACKEND_URL || "(empty API URL)"}. Check Wi‑Fi and try again.`;
       logError(
@@ -159,17 +191,22 @@ export const recoverAccessToken = async (): Promise<boolean> => {
 
   recoverPromise = (async () => {
     lastRecoveryFailedDueToNetwork = false;
+    lastRecoveryFailedDueToRateLimit = false;
     if (await refreshAccessToken()) {
       return true;
     }
     if (await exchangeFirebaseToken(false)) {
       return true;
     }
-    if (await exchangeFirebaseToken(true)) {
+    // Skip forced refresh when already rate-limited — it would only burn more attempts.
+    if (!isExchangeRateLimited() && (await exchangeFirebaseToken(true))) {
       return true;
     }
     if (!getFirebaseAuth().currentUser) {
       lastAuthGateMessage = "Authentication required. Please sign in again.";
+    } else if (lastRecoveryFailedDueToRateLimit) {
+      lastAuthGateMessage =
+        "Too many sign-in attempts. Please wait a few minutes, then try again.";
     } else if (lastRecoveryFailedDueToNetwork) {
       lastAuthGateMessage = `Cannot reach API at ${STRON_BACKEND_URL || "(empty API URL)"}. Check Wi‑Fi and try again.`;
     } else {
@@ -184,6 +221,10 @@ export const recoverAccessToken = async (): Promise<boolean> => {
 };
 
 export const wasLastAuthRecoveryNetworkFailure = (): boolean => lastRecoveryFailedDueToNetwork;
+
+/** True when last recovery failed due to network or auth rate-limit — do not force logout. */
+export const wasLastAuthRecoveryTransient = (): boolean =>
+  lastRecoveryFailedDueToNetwork || lastRecoveryFailedDueToRateLimit;
 
 let ensureTokenPromise: Promise<boolean> | null = null;
 
@@ -201,10 +242,22 @@ export const ensureValidAccessToken = async (): Promise<boolean> => {
     if (accessToken && !TokenStorage.isExpired(accessToken)) {
       return true;
     }
+
     // 1–3. Refresh JWT, then Firebase exchange (cached then forced)
     if (await recoverAccessToken()) {
       return true;
     }
+
+    // Rate-limited exchange must not freeze the whole app. If we still have a
+    // JWT (even near/past expiry), send it and let the API accept or 401.
+    if (lastRecoveryFailedDueToRateLimit || isExchangeRateLimited()) {
+      const fallbackToken = accessToken || (await TokenStorage.getAccessToken());
+      if (fallbackToken) {
+        return true;
+      }
+      return false;
+    }
+
     // Never wipe tokens / logout on transient network failures.
     if (!lastRecoveryFailedDueToNetwork) {
       void notifySessionExpired();
@@ -330,7 +383,7 @@ export const createApiClient = (): AxiosInstance => {
           return instance.request(original);
         }
 
-        if (!lastRecoveryFailedDueToNetwork) {
+        if (!lastRecoveryFailedDueToNetwork && !lastRecoveryFailedDueToRateLimit) {
           void notifySessionExpired();
         }
       }

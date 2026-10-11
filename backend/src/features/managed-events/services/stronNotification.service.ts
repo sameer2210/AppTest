@@ -26,7 +26,17 @@ export const notifyUser = async (
     // inbox write must never block lifecycle
   }
   try {
-    await sendNotificationToUser(uid, title, body);
+    const pushData: Record<string, unknown> = {};
+    if (eventKey) pushData.eventKey = eventKey;
+    if (tag) pushData.tag = tag;
+    if (data && typeof data === "object") Object.assign(pushData, data);
+    await sendNotificationToUser(
+      uid,
+      title,
+      body,
+      undefined,
+      Object.keys(pushData).length > 0 ? pushData : undefined,
+    );
   } catch (error: unknown) {
     logger.warn("[stronManaged] push failed:", getErrorMessage(error));
   }

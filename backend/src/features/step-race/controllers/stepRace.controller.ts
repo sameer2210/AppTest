@@ -34,6 +34,7 @@ export const searchOpponents = async (req: Request, res: Response) => {
 // Get random shadow opponents
 export const getRandomShadowOpponents = async (_req: Request, res: Response) => {
   try {
+    res.set("Cache-Control", "public, max-age=180, stale-while-revalidate=300");
     const opponents = stepRaceService.getRandomShadowOpponentsService();
     return res.json(opponents);
   } catch (error) {

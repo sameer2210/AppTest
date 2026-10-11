@@ -21,6 +21,7 @@ import {
 import {
   apiClient,
   authPublicApi,
+  clearAuthExchangeRateLimit,
   exchangeFirebaseToken,
   publicApi,
 } from "../core/apiClient.service";
@@ -86,6 +87,8 @@ const generateRandomUsername = (length = 6) => {
 
 const LOGOUT_REQUEST_TIMEOUT_MS = 5000;
 const GUEST_SIGN_IN_TIMEOUT_MS = 8000;
+
+let signOutInFlight: Promise<void> | null = null;
 
 const withAuthServiceTimeout = async <T>(
   label: string,
@@ -313,6 +316,7 @@ export const AuthService = {
       const isNewUser = isNewUserFlag !== false;
 
       if (accessToken && refreshToken) {
+        clearAuthExchangeRateLimit();
         await TokenStorage.saveTokens(accessToken, refreshToken);
       }
 
@@ -644,6 +648,7 @@ export const AuthService = {
     }
 
     await TokenStorage.saveTokens(accessToken, refreshToken);
+    clearAuthExchangeRateLimit();
 
     const credential = await withAuthServiceTimeout(
       "Guest Firebase sign-in",
@@ -737,6 +742,17 @@ export const AuthService = {
   },
 
   async signOut() {
+    if (signOutInFlight) {
+      return signOutInFlight;
+    }
+
+    signOutInFlight = this._signOutInternal().finally(() => {
+      signOutInFlight = null;
+    });
+    return signOutInFlight;
+  },
+
+  async _signOutInternal() {
     try {
       await RevenueCatService.logOutUser();
     } catch (error) {
@@ -745,6 +761,7 @@ export const AuthService = {
 
     try {
       const uid = getFirebaseAuth().currentUser?.uid;
+      const accessToken = await TokenStorage.getAccessToken();
       const Notifications = getExpoNotifications();
       if (uid && Notifications) {
         try {
@@ -755,18 +772,22 @@ export const AuthService = {
           );
           const token = tokenResponse.data;
           if (token) {
-            await apiClient.post(
+            // Skip auth gate — logout must not call exchange-token / ensureValidAccessToken.
+            await publicApi.post(
               "/api/notifications/unregister-token",
               { uid, token },
-              { timeout: LOGOUT_REQUEST_TIMEOUT_MS },
+              {
+                timeout: LOGOUT_REQUEST_TIMEOUT_MS,
+                headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+              },
             );
           }
-        } catch (error) {
-          logError("FCM unregister on logout failed", error);
+        } catch {
+          // Best-effort — token may already be invalid during forced logout.
         }
       }
-    } catch (error) {
-      logError("Token un-registration on logout failed", error);
+    } catch {
+      // ignore
     }
 
     try {
@@ -832,11 +853,16 @@ export const AuthService = {
     // Apple sign-out: no SDK-level sign-out needed (revoking is user-side in iOS Settings).
 
     try {
-      if (getFirebaseAuth().currentUser) {
+      const current = getFirebaseAuth().currentUser;
+      if (current) {
         await withAuthServiceTimeout("Firebase sign-out", signOut(getFirebaseAuth()), 3000);
       }
     } catch (error) {
-      logError("Firebase sign-out on logout failed", error);
+      const code = String((error as { code?: string })?.code ?? "");
+      const message = String((error as { message?: string })?.message ?? "");
+      if (code !== "auth/no-current-user" && !message.includes("no-current-user")) {
+        logError("Firebase sign-out on logout failed", error);
+      }
     }
 
     try {

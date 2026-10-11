@@ -33,9 +33,7 @@ export const StronBootstrap = () => {
   uidRef.current = uid;
 
   useEffect(() => {
-    registerSessionExpiryHandler(() => {
-      void dispatch(signOutUser());
-    });
+    registerSessionExpiryHandler(() => dispatch(signOutUser()));
   }, [dispatch]);
 
   useEffect(() => {
