@@ -193,22 +193,41 @@ export type AnalyticsEventName = keyof AnalyticsEventMap;
  * Fire-and-forget PostHog capture. Never throws, never blocks a user flow.
  * No-ops unless the API base URL includes `apiv2` and a PostHog key is set.
  */
+
 export const captureEvent = <E extends AnalyticsEventName>(
   event: E,
   ...args: AnalyticsEventMap[E] extends Record<string, never>
     ? [properties?: AnalyticsEventMap[E]]
     : [properties: AnalyticsEventMap[E]]
 ): void => {
-  if (!isPostHogEnabled) return;
+  if (!isPostHogEnabled) {
+    if (__DEV__) {
+    console.log("----------------------------------------------------------------------");
+      console.log(`[PostHog] Analytics disabled; skipped event: ${event}`);
+    }
+    return;
+  }
+
+  const properties = args[0] ?? {};
+
+  if (__DEV__) {
+    console.log("[PostHog] Event:", event);
+    console.log("[PostHog] Properties:", properties);
+    console.log("----------------------------------------------------------------------");
+  }
 
   void (async () => {
     try {
       await posthog.ready();
-      posthog.capture(event, args[0]);
+      posthog.capture(event, properties);
       await posthog.flush();
+
+      if (__DEV__) {
+        console.log(`-----------------------------[PostHog] Flush completed: ${event}`);
+      }
     } catch (error) {
       if (__DEV__) {
-        console.warn(`[PostHog] Failed to capture "${event}"`, error);
+        console.error(`---------------------------[PostHog] Failed: ${event}`, error);
       }
     }
   })();

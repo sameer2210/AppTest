@@ -20,6 +20,7 @@ import stronManagedRoutes from "./features/managed-events/routes/stron.route.js"
 import eventShareRoutes from "./features/managed-events/routes/eventShare.route.js";
 import opinionRoutes from "./features/opinion-hub/routes/opinion.route.js";
 import opinionShareRoutes from "./features/opinion-hub/routes/opinionShare.route.js";
+import { openSharedOpinionPage } from "./features/opinion-hub/controllers/opinionShare.controller.js";
 import feedbackRoutes from "./features/user-engagement/routes/feedback.route.js";
 import { openSharedPlanPage } from "./features/gym-business/controllers/planShare.controller.js";
 import listingShareRoutes from "./features/gym-business/routes/listingShare.route.js";
@@ -95,6 +96,30 @@ app.use(
   }),
 );
 
+// TEMPORARY DEVELOPMENT API AUDIT LOG
+if (process.env.NODE_ENV !== "production") {
+  app.use((req: Request, res: Response, next) => {
+    const start = Date.now();
+
+    const originalJson = res.json.bind(res);
+
+    res.json = ((body: unknown) => {
+      console.log("\n======================================================");
+      console.log("[*****************API RESPONSE AUDIT====================]");
+      console.log("METHOD:", req.method);
+      console.log("ENDPOINT:", req.originalUrl);
+      console.log("STATUS:", res.statusCode);
+      console.log("RESPONSE PAYLOAD:", body);
+      console.log("RESPONSE TIME:", `${Date.now() - start} ms`);
+      console.log("========================================================\n");
+
+      return originalJson(body);
+    }) as typeof res.json;
+
+    next();
+  });
+}
+
 void initializeRemoteConfig();
 setWhatsappProvider(createWhatsappProvider());
 if (process.env.NODE_ENV === "test") {
@@ -115,6 +140,7 @@ app.use("/api/event", eventShareRoutes);
 
 app.use("/opinion/share", opinionShareRoutes);
 app.use("/api/opinion/share", opinionShareRoutes);
+app.get("/opinion/:questionId", openSharedOpinionPage as unknown as RequestHandler);
 
 app.get("/plan/:id", openSharedPlanPage as unknown as RequestHandler);
 app.get("/api/plan/:id", openSharedPlanPage as unknown as RequestHandler);

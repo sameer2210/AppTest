@@ -63,6 +63,18 @@ function normalizeProperties(properties: ServiceParams = {}): ServiceParams {
 }
 
 export function trackEvent(eventName: string, properties: ServiceParams = {}): void {
+    // Normalize payload first so we can see exactly
+  // what data the backend analytics event is generating.
+  const normalizedProperties = normalizeProperties(properties);
+
+  // TEMPORARY DEBUG LOG FOR EVENT AUDIT
+  console.log('----------------------------------------------------------------------------');
+  console.log('[---------------ANALYTICS EVENT TRIGGERED======================]');
+  console.log('Event:', eventName);
+  console.log('Properties:', normalizedProperties);
+  console.log('PostHog Client Initialized:', !!client);
+  console.log('-----------------------------------------------------------------------------');
+
   if (!client) return;
 
   const distinctId = String(properties.user_id || properties.uid || "system");
